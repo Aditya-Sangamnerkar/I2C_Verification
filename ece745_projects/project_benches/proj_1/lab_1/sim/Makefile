@@ -30,6 +30,6 @@ optimize:
 compile: comp_I2C_MB comp_bench optimize
 
 simulate:
-	vsim  -i -classdebug -msgmode both -do "set NoQuitOnFinish 1; do wave.do" optimized_debug_top_tb
+	vsim  -c -classdebug -msgmode both -do "set NoQuitOnFinish 1; do wave.do" optimized_debug_top_tb
 
 debug: clean compile simulate

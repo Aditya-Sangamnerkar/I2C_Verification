@@ -30,6 +30,7 @@ typedef bit i2c_op_t;
 i2c_op_t op;
 bit [I2C_DATA_WIDTH-1:0] write_data[];
 bit [I2C_DATA_WIDTH-1:0] read_data[];
+bit [I2C_DATA_WIDTH-1:0] write_data_i2c;
 bit tx_complete;
 
 // ****************************************************************************
@@ -54,8 +55,7 @@ bit monitor_we;
 
 initial begin: wb_monitoring
     wb_bus.master_monitor( .addr(moniter_addr), .data(moniter_data), .we(monitor_we));
-    $display("WB_ADDR : %d, WB_DATA : %d, WB_WE : %d", moniter_addr, moniter_data, monitor_we);
-  
+    //$display("WB_ADDR : %d, WB_DATA : %d, WB_WE : %d", moniter_addr, moniter_data, monitor_we);
 end: wb_monitoring
 
 
@@ -70,15 +70,21 @@ initial begin: slave
 end: slave
 
 
-initial begin: slave_monitor
+initial begin: monitor_i2c_bus
   bit [I2C_ADDR_WIDTH-1: 0] addr_i2c;
   bit [I2C_DATA_WIDTH-1:0] data_i2c[];
   i2c_op_t op_i2c;
   forever begin
     i2c_bus.monitor(.addr(addr_i2c), .data(data_i2c), .op(op_i2c));
-    $display("addr: %h op: %b data: %p", addr_i2c, op_i2c, data_i2c);
+    //$display("addr: %h op: %b data: %p", addr_i2c, op_i2c, data_i2c);
+    if(op_i2c == 1'b0) begin
+        $display("I2C_BUS WRITE Transfer: %p",data_i2c);
+    end
+    else begin
+      $display("I2C_BUS READ Transfer: %p",data_i2c);
+    end
   end
-end: slave_monitor
+end: monitor_i2c_bus
 
 
 
@@ -124,7 +130,7 @@ initial begin: test_flow
     wb_bus.master_read( .addr(2'h2), .data(data_read));
   end while(!data_read[7]);
 
-  for(int i=0; i<10; i++) begin
+  for(int i=0; i<32; i++) begin
    
       // Write byte 0x78 to the DPR. This is the byte to be written.
       wb_bus.master_write( .addr(2'h1), .data(i));
@@ -152,8 +158,8 @@ initial begin: test_flow
 
   // /* *********************** READ 32 values [100-131]*************************** */
   //initialize read_data
-  read_data = new[4];
-  for(int i=0; i<4; i++) begin
+  read_data = new[32];
+  for(int i=0; i<32; i++) begin
     read_data[i] = 8'h64 + i;
   end
 
@@ -178,7 +184,7 @@ initial begin: test_flow
     wb_bus.master_read( .addr(2'h2), .data(data_read));
   end while(!data_read[7]);
 
-  for(int i=0; i<4; i++) begin
+  for(int i=0; i<read_data.size(); i++) begin
     // Write byte "xxxxx010" to the CMDR. This is the ACK command.
     wb_bus.master_write( .addr(2'h2), .data(8'bxxxxx010));
 
@@ -191,89 +197,43 @@ initial begin: test_flow
     wb_bus.master_read( .addr(2'h1), .data(data_read));
   end
 
-  // // Write byte “xxxxx101” to the CMDR. This is Stop command.
-  //  wb_bus.master_write( .addr(2'h2), .data(8'bxxxxx101));
+  // Write byte “xxxxx101” to the CMDR. This is Stop command.
+   wb_bus.master_write( .addr(2'h2), .data(8'bxxxxx101));
   
-  // // Wait for interrupt or until DON bit of CMDR reads '1'.
-  // do begin
-  //   wb_bus.master_read( .addr(2'h2), .data(data_read));
-  // end while(!data_read[7]);
+  // Wait for interrupt or until DON bit of CMDR reads '1'.
+  do begin
+    wb_bus.master_read( .addr(2'h2), .data(data_read));
+  end while(!data_read[7]);
 
   // /* ************** WRITE 64 incrementing values [64:127] READ 64 decrementing values [63:0] ******************** */
 
-  // initialize read_data
-  read_data = new[64];
-  for(int i=63; i>=0; i--) begin
-    read_data[63-i] = i;
-  end
+  for(int i=0 ;i<64; i++) begin
 
-  // Write byte “xxxxx100” to the CMDR. This is Start command.
-   wb_bus.master_write( .addr(2'h2), .data(8'bxxxxx100));
+      // *************** WRITE ****************
+      write_data_i2c = 8'h40 + i;
+      // Write byte “xxxxx100” to the CMDR. This is Start command.
+      wb_bus.master_write( .addr(2'h2), .data(8'bxxxxx100));
   
-  // Wait for interrupt or until DON bit of CMDR reads '1'.
-  do begin
-    wb_bus.master_read( .addr(2'h2), .data(data_read));
-  end while(!data_read[7]);
+      // Wait for interrupt or until DON bit of CMDR reads '1'.
+      do begin
+        wb_bus.master_read( .addr(2'h2), .data(data_read));
+      end while(!data_read[7]);
   
-  // Write byte 0x45 to the DPR. This is the slave address 0x22 shifted 1 bit to the left +
-  // rightmost bit = '1', which means reading.
-   wb_bus.master_write( .addr(2'h1), .data(8'h45));
+      // Write byte 0x44 to the DPR. This is the slave address 0x22 shifted 1 bit to the left +
+      // rightmost bit = '0', which means writing.
+      wb_bus.master_write( .addr(2'h1), .data(8'h44));
   
-  // Write byte “xxxxx001” to the CMDR. This is Write command.
-   wb_bus.master_write( .addr(2'h2), .data(8'bxxxxx001));
+      // Write byte “xxxxx001” to the CMDR. This is Write command.
+      wb_bus.master_write( .addr(2'h2), .data(8'bxxxxx001));
   
-  // Wait for interrupt or until DON bit of CMDR reads '1'. If instead of DON the NAK bit
-  // is '1', then slave doesn't respond.
-  do begin
-    wb_bus.master_read( .addr(2'h2), .data(data_read));
-  end while(!data_read[7]);
-
-  for(int i=0; i<64; i++) begin
-    // Write byte "xxxxx010" to the CMDR. This is the ACK command.
-    wb_bus.master_write( .addr(2'h2), .data(8'bxxxxx010));
-
-    // Wait for interrupt or until DON bit of CMDR reads '1'.
-    do begin
-      wb_bus.master_read( .addr(2'h2), .data(data_read));
-    end while(!data_read[7]);
-
-    // Read DPR to get received byte of data.  
-    wb_bus.master_read( .addr(2'h1), .data(data_read));
-  end
-
-  // // Write byte “xxxxx101” to the CMDR. This is Stop command.
-  //  wb_bus.master_write( .addr(2'h2), .data(8'bxxxxx101));
-  
-  // // Wait for interrupt or until DON bit of CMDR reads '1'.
-  // do begin
-  //   wb_bus.master_read( .addr(2'h2), .data(data_read));
-  // end while(!data_read[7]);
-  
-  // Write byte “xxxxx100” to the CMDR. This is Start command.
-   wb_bus.master_write( .addr(2'h2), .data(8'bxxxxx100));
-  
-  // Wait for interrupt or until DON bit of CMDR reads '1'.
-  do begin
-    wb_bus.master_read( .addr(2'h2), .data(data_read));
-  end while(!data_read[7]);
-  
-  // Write byte 0x44 to the DPR. This is the slave address 0x22 shifted 1 bit to the left +
-  // rightmost bit = '0', which means writing.
-   wb_bus.master_write( .addr(2'h1), .data(8'h44));
-  
-  // Write byte “xxxxx001” to the CMDR. This is Write command.
-   wb_bus.master_write( .addr(2'h2), .data(8'bxxxxx001));
-  
-  // Wait for interrupt or until DON bit of CMDR reads '1'. If instead of DON the NAK bit
-  // is '1', then slave doesn't respond.
-  do begin
-    wb_bus.master_read( .addr(2'h2), .data(data_read));
-  end while(!data_read[7]);
-
-  for(int i=64; i<128; i++) begin
+      // Wait for interrupt or until DON bit of CMDR reads '1'. If instead of DON the NAK bit
+      // is '1', then slave doesn't respond.
+      do begin
+        wb_bus.master_read( .addr(2'h2), .data(data_read));
+      end while(!data_read[7]);
    
       // Write byte 0x78 to the DPR. This is the byte to be written.
-      wb_bus.master_write( .addr(2'h1), .data(i));
+      wb_bus.master_write( .addr(2'h1), .data(write_data_i2c));
   
       // Write byte “xxxxx001” to the CMDR. This is Write command.
       wb_bus.master_write( .addr(2'h2), .data(8'bxxxxx001));
@@ -283,8 +243,49 @@ initial begin: test_flow
         wb_bus.master_read( .addr(2'h2), .data(data_read));
       end while(!data_read[7]);
 
-  end
   
+      // *********************** READ ******************************
+
+      // initialize read_data
+      read_data = new[1];
+      read_data[0] = 8'h3F - i;
+
+      // Write byte “xxxxx100” to the CMDR. This is Start command.
+      wb_bus.master_write( .addr(2'h2), .data(8'bxxxxx100));
+  
+      // Wait for interrupt or until DON bit of CMDR reads '1'.
+      do begin
+        wb_bus.master_read( .addr(2'h2), .data(data_read));
+      end while(!data_read[7]);
+  
+      // Write byte 0x45 to the DPR. This is the slave address 0x22 shifted 1 bit to the left +
+      // rightmost bit = '1', which means reading.
+      wb_bus.master_write( .addr(2'h1), .data(8'h45));
+  
+      // Write byte “xxxxx001” to the CMDR. This is Write command.
+      wb_bus.master_write( .addr(2'h2), .data(8'bxxxxx001));
+  
+      // Wait for interrupt or until DON bit of CMDR reads '1'. If instead of DON the NAK bit
+      // is '1', then slave doesn't respond.
+      do begin
+        wb_bus.master_read( .addr(2'h2), .data(data_read));
+      end while(!data_read[7]);
+
+  
+      // Write byte "xxxxx010" to the CMDR. This is the ACK command.
+      wb_bus.master_write( .addr(2'h2), .data(8'bxxxxx010));
+
+      // Wait for interrupt or until DON bit of CMDR reads '1'.
+      do begin
+        wb_bus.master_read( .addr(2'h2), .data(data_read));
+      end while(!data_read[7]);
+
+      // Read DPR to get received byte of data.  
+      wb_bus.master_read( .addr(2'h1), .data(data_read));
+
+  end
+
+
   // Write byte “xxxxx101” to the CMDR. This is Stop command.
    wb_bus.master_write( .addr(2'h2), .data(8'bxxxxx101));
   
@@ -292,9 +293,6 @@ initial begin: test_flow
   do begin
     wb_bus.master_read( .addr(2'h2), .data(data_read));
   end while(!data_read[7]);
-
-
-  
 
 end: test_flow
 

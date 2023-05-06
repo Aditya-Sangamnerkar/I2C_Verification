@@ -1,11 +1,12 @@
 interface wb_if       #(
-      int ADDR_WIDTH = 32,                                
-      int DATA_WIDTH = 16                                
+      int ADDR_WIDTH = 2,                                
+      int DATA_WIDTH = 8                                
       )
 (
   // System sigals
   input wire clk_i,
   input wire rst_i,
+  input wire irq_i,
   // Master signals
   output reg cyc_o,
   output reg stb_o,
@@ -21,10 +22,24 @@ interface wb_if       #(
   // Shred signals
   output reg [DATA_WIDTH-1:0] dat_o,
   input wire [DATA_WIDTH-1:0] dat_i
-
   );
 
   initial reset_bus();
+
+// ****************************************************************************              
+   task wait_for_reset();
+       if (rst_i !== 0) @(negedge rst_i);
+   endtask
+
+// ****************************************************************************              
+   task wait_for_num_clocks(int num_clocks);
+       repeat (num_clocks) @(posedge clk_i);
+   endtask
+
+// ****************************************************************************              
+   task wait_for_interrupt();
+       @(posedge irq_i);
+   endtask
 
 // ****************************************************************************              
    task reset_bus();
@@ -40,7 +55,6 @@ interface wb_if       #(
                    input bit [ADDR_WIDTH-1:0]  addr,
                    input bit [DATA_WIDTH-1:0]  data
                    );  
-      
 
         @(posedge clk_i);
         adr_o <= addr;
@@ -48,7 +62,6 @@ interface wb_if       #(
         cyc_o <= 1'b1;
         stb_o <= 1'b1;
         we_o <= 1'b1;
-        
         while (!ack_i) @(posedge clk_i);
         cyc_o <= 1'b0;
         stb_o <= 1'b0;
@@ -88,7 +101,7 @@ endtask
                    output bit [DATA_WIDTH-1:0] data,
                    output bit we                    
                   );
-                         
+          
           while (!cyc_o) @(posedge clk_i);                                                  
           while (!ack_i) @(posedge clk_i);
           addr = adr_o;

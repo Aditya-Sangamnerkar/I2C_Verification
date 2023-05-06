@@ -1,0 +1,14 @@
+# Current time Fri Apr 21 23:34:44 2023
+# Program = vish
+# Id = "2022.2_1"
+# Version = "2022.05"
+# Date = "May 19 2022"
+# Platform = "linux"
+# 0    0xf7c41bf2: '__strlen_sse2_bsf + 0x32' in '/lib/libc.so.6'
+# Current time Fri Apr 21 23:36:10 2023
+# Program = vish
+# Id = "2022.2_1"
+# Version = "2022.05"
+# Date = "May 19 2022"
+# Platform = "linux"
+# 0    0xf7c41bd6: '__strlen_sse2_bsf + 0x16' in '/lib/libc.so.6'

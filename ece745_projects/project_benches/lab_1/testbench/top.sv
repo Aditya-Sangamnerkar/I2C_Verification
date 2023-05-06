@@ -43,8 +43,11 @@ bit [WB_DATA_WIDTH-1 : 0] moniter_data;
 bit monitor_we;
 
 initial begin: wb_monitoring
-  wb_bus.master_monitor( .addr(moniter_addr), .data(moniter_data), .we(monitor_we));
-  $display("WB_ADDR : %d, WB_DATA : %d, WB_WE : %d", moniter_addr, moniter_data, monitor_we);
+  forever begin
+     wb_bus.master_monitor( .addr(moniter_addr), .data(moniter_data), .we(monitor_we));
+    $display("WB_ADDR : %d, WB_DATA : %d, WB_WE : %d", moniter_addr, moniter_data, monitor_we);
+  end
+ 
 end: wb_monitoring
 
 // ****************************************************************************

@@ -1,3 +1,5 @@
+import i2c_pkg::i2c_op_t;
+
 interface i2c_if	#(
 		int I2C_ADDR_WIDTH = 7,
 		int I2C_DATA_WIDTH = 8
@@ -11,7 +13,7 @@ interface i2c_if	#(
 
 // system signals
 
-typedef  bit   i2c_op_t;
+//typedef  bit   i2c_op_t;
 typedef enum bit[1:0] {ERROR=2'b00, START=2'b01, STOP=2'b10, DATA=2'b11} condition_type_t;
 
 bit release_sda = 1'b1;
@@ -52,9 +54,12 @@ assign sda = (release_sda) ? 1'bz : sda_s;
 	
 	//$display("******* wait for i2c pass *********");	
 	// check for condition
+	//$display("1. write_data %p", write_data);
 	read_condition(.cond_type(condition), .data_bit(data));
+	//$display("2. write_data %p", write_data);
 	if(condition == START) begin
-		// clear write data buffer
+		//$display("3. write_data %p", write_data);
+		// clear write data buffer and buffer previous transaction control data
 		monitor_write_data_buffer = new[write_data_buffer.size()] (write_data_buffer);
 		monitor_operation_buffer = operation;
 		monitor_slave_address = slave_address;
@@ -70,6 +75,7 @@ assign sda = (release_sda) ? 1'bz : sda_s;
 		read_data(.data_bit(data));
 		operation = i2c_op_t'(data);
 		op = operation;
+		
 		//$display("operation : %b",operation);
 		// acknowledge signal from slave
 		slave_acknowledge();
@@ -81,19 +87,16 @@ assign sda = (release_sda) ? 1'bz : sda_s;
 
 		// trigger start_done event
 		-> start_done;
+		// to remove duplicate data from i2c trans 
+		write_data.delete;
+		//$display("4. write_data %p", write_data);
+		
 	end
 	else if(condition == DATA) begin
+		//$display("5. write_data %p", write_data);
 			// write operation
 			if(op == 1'b0) begin
 				// read data byte
-				// reset data byte
-
-				// repeat(I2C_DATA_WIDTH-1) begin 
-				// 	data_byte = {data_byte[I2C_DATA_WIDTH-1:1], data};
-				// 	data_byte = data_byte << 1;
-				// 	read_data(.data_bit(data));
-				// end
-
 				data_byte[7] = data;
 				for(int i=I2C_DATA_WIDTH-2; i>=0; i--) begin
 					read_data(.data_bit(data));
@@ -116,17 +119,25 @@ assign sda = (release_sda) ? 1'bz : sda_s;
 				// release sda bus from slave
 				slave_sda_release();
 				//$display("slave sda release");
+		//$display("6. write_data %p", write_data);
 			end
 			// read operation
 			else begin
 
 				
 			end
+			
 
 	end
+	
 	else if(condition == STOP) begin
-		
+		// to remove duplicate data from i2c trans 
+		write_data.delete;
+
+		// this is done so as to avoid a false read after i2c_wait in the top.sv
 		op = 1'b0;
+		//$display("7. write_data %p", write_data);
+
 		-> stop_done;
 		//$display("stop received");
 		
@@ -145,6 +156,7 @@ assign sda = (release_sda) ? 1'bz : sda_s;
 	// provide 8 bits of data on sda
 	// wait for ack from master
 	// assumption : master koi bakchodi nahi karega
+	
 	//$display("provide_read_data read_data %p", read_data);
 	transfer_complete = 1'b0;
 	monitor_read_data_buffer = new[read_data.size()](read_data);
@@ -153,18 +165,22 @@ assign sda = (release_sda) ? 1'bz : sda_s;
 		// write data byte to sda bus	
 		for(int j=I2C_DATA_WIDTH-1; j>=0; j--) begin
 			// write data bit to sda bus
-			@(negedge scl);
+			
 			sda_s = read_data[i][j];
 			release_sda = 1'b0;
+			@(negedge scl);
+			
 			//$display("provide_read_data bit %b", read_data[i][j]);
 		end
 		// release sda bus
-		// negedge already hai toh ek aur ko wait nako karo
 		release_sda = 1'b1;
 		//$display("slave sda release");
 		// wait for ack from the master 
 		wait(scl==1'b1 && sda == 1'b0);
 		//$display("master ack received");
+		
+		// master ack received wait here for next negedge.
+		@(negedge scl);
 
 	end
 	transfer_complete = 1'b1;
